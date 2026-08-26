@@ -1,16 +1,18 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { Stack } from "expo-router";
 
-const queryClient = new QueryClient();
+const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!, {
+  unsavedChangesWarning: false,
+});
 
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <ConvexProvider client={convex}>
       <Stack
         screenOptions={{
           headerShown: false,
         }}
       />
-    </QueryClientProvider>
+    </ConvexProvider>
   );
 }
