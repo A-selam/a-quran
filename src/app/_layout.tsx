@@ -1,5 +1,7 @@
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { Stack } from "expo-router";
+import { PaperProvider } from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!, {
   unsavedChangesWarning: false,
@@ -7,12 +9,16 @@ const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!, {
 
 export default function RootLayout() {
   return (
-    <ConvexProvider client={convex}>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-        }}
-      />
-    </ConvexProvider>
+    <PaperProvider>
+      <ConvexProvider client={convex}>
+        <SafeAreaView>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+            }}
+          />
+        </SafeAreaView>
+      </ConvexProvider>
+    </PaperProvider>
   );
 }
