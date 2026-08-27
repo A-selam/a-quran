@@ -33,97 +33,166 @@
 //   },
 // });
 
-import { useState } from "react";
+import { useAction } from "convex/react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Button,
-  FlatList,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import {
-  useChapterAudio,
-  useChapters,
-  useReciters,
-} from "../hooks/useQuranAudio";
+import { api } from "../../convex/_generated/api";
 
 export default function QuranAudioScreen() {
-  // User Selection State
   const [selectedReciterId, setSelectedReciterId] = useState<number | null>(
     null,
   );
   const [selectedChapterNumber, setSelectedChapterNumber] = useState<
     number | null
   >(null);
+  const [reciters, setReciters] = useState<
+    Awaited<ReturnType<typeof getReciters>>
+  >([]);
+  const [chapters, setChapters] = useState<
+    Awaited<ReturnType<typeof getChapters>>
+  >([]);
+  const [audioData, setAudioData] = useState<Awaited<
+    ReturnType<typeof getAudio>
+  > | null>(null);
+  const [loadingReciters, setLoadingReciters] = useState(true);
+  const [loadingChapters, setLoadingChapters] = useState(false);
+  const [loadingAudio, setLoadingAudio] = useState(false);
+  const [audioError, setAudioError] = useState(false);
 
-  // TanStack Query Hooks
-  const { data: reciters, isLoading: loadingReciters } = useReciters();
-  const { data: chapters, isLoading: loadingChapters } = useChapters();
-  const {
-    data: audioData,
-    isLoading: loadingAudio,
-    isError: audioError,
-  } = useChapterAudio(selectedReciterId, selectedChapterNumber);
+  const getReciters = useAction(api.quran.getReciters);
+  const getChapters = useAction(api.quran.getChapters);
+  const getAudio = useAction(api.quran.getAudio);
+
+  useEffect(() => {
+    let active = true;
+
+    void getReciters()
+      .then((data) => {
+        if (active) setReciters(data);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoadingReciters(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [getReciters]);
+
+  useEffect(() => {
+    if (selectedReciterId === null) {
+      setChapters([]);
+      return;
+    }
+
+    let active = true;
+    setLoadingChapters(true);
+    setSelectedChapterNumber(null);
+    setAudioData(null);
+
+    void getChapters({ reciterId: String(selectedReciterId) })
+      .then((data) => {
+        if (active) setChapters(data);
+      })
+      .catch(() => {
+        if (active) setChapters([]);
+      })
+      .finally(() => {
+        if (active) setLoadingChapters(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [getChapters, selectedReciterId]);
+
+  useEffect(() => {
+    if (selectedReciterId === null || selectedChapterNumber === null) {
+      setAudioData(null);
+      return;
+    }
+
+    let active = true;
+    setLoadingAudio(true);
+    setAudioError(false);
+
+    void getAudio({
+      reciterID: String(selectedReciterId),
+      chapterID: selectedChapterNumber,
+    })
+      .then((data) => {
+        if (active) setAudioData(data);
+      })
+      .catch(() => {
+        if (active) setAudioError(true);
+      })
+      .finally(() => {
+        if (active) setLoadingAudio(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [getAudio, selectedChapterNumber, selectedReciterId]);
 
   return (
     <ScrollView>
       <View style={styles.container}>
         <Text style={styles.heading}>Quran Recitations</Text>
 
-        {/* STEP 1: SELECT RECITER */}
         <Text style={styles.sectionTitle}>1. Select Reciter</Text>
         {loadingReciters ? (
           <ActivityIndicator size="small" />
         ) : (
-          <FlatList
-            horizontal
-            data={reciters}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => {
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {reciters.map((item) => {
               const isSelected = item.id === selectedReciterId;
               return (
                 <TouchableOpacity
+                  key={item.id}
                   style={[styles.chip, isSelected && styles.selectedChip]}
                   onPress={() => setSelectedReciterId(item.id)}
                 >
                   <Text style={isSelected ? styles.selectedText : styles.text}>
-                    {item.name}
+                    {item.translatedName.name}
                   </Text>
                 </TouchableOpacity>
               );
-            }}
-          />
+            })}
+          </ScrollView>
         )}
 
-        {/* STEP 2: SELECT CHAPTER */}
         <Text style={styles.sectionTitle}>2. Select Chapter</Text>
         {loadingChapters ? (
           <ActivityIndicator size="small" />
         ) : (
-          <FlatList
-            horizontal
-            data={chapters}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => {
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {chapters.map((item) => {
               const isSelected = item.id === selectedChapterNumber;
               return (
                 <TouchableOpacity
+                  key={item.id}
                   style={[styles.chip, isSelected && styles.selectedChip]}
                   onPress={() => setSelectedChapterNumber(item.id)}
                 >
                   <Text style={isSelected ? styles.selectedText : styles.text}>
-                    {item.id}. {item.nameSimple}
+                    {item.id}. {item.name}
                   </Text>
                 </TouchableOpacity>
               );
-            }}
-          />
+            })}
+          </ScrollView>
         )}
 
-        {/* STEP 3: AUDIO PLAYER / LINK */}
         <Text style={styles.sectionTitle}>3. Audio Status</Text>
         {loadingAudio && (
           <View style={styles.statusBox}>
@@ -138,16 +207,15 @@ export default function QuranAudioScreen() {
           </Text>
         )}
 
-        {audioData?.audioFile?.audioUrl && (
+        {audioData?.audioUrl && (
           <View style={styles.statusBox}>
             <Text style={styles.audioUrlText}>
-              Audio URL Ready: {audioData.audioFile.audioUrl}
+              Audio URL Ready: {audioData.audioUrl}
             </Text>
-            {/* Here you pass audioData.audioFile.audioUrl to react-native-track-player or expo-av */}
             <Button
               title="Play Audio"
               onPress={() => {
-                console.log("Playing:", audioData.audioFile.audioUrl);
+                console.log("Playing:", audioData.audioUrl);
               }}
             />
           </View>
